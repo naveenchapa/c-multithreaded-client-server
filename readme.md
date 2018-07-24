@@ -37,8 +37,8 @@ On line 59 in `client.c`, there is a TODO statement. This is where you would put
 Compile your C programs by running:
 
 ```Shell
-gcc -pthread -lnsl -lsocket server.c -o server
-gcc -lnsl -lsocket client.c -o client
+gcc -pthread -lnsl  server.c -o server
+gcc -lnsl -pthread client.c -o client
 ```
 
 On some machines, the programs can be compiled without the `-lnsl` or `-lsocket` parameters, or will even raise errors when compiling with them. In that case, try to compile without the parameters.
