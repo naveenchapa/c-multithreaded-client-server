@@ -1,8 +1,4 @@
-/*
- * server.c
- * Version 20161003
- * Written by Harry Wong (RedAndBlueEraser)
- */
+
 
 #include <netinet/in.h>
 #include <pthread.h>
@@ -16,11 +12,18 @@
 
 #define BACKLOG 10
 
-typedef struct pthread_arg_t {
+typedef struct client_t {
     int new_socket_fd;
+    char client_name[100];
+} client_t;
+
+typedef struct pthread_arg_t {
+    struct client_t client;
     struct sockaddr_in client_address;
-    /* TODO: Put arguments passed to threads here. See lines 116 and 139. */
 } pthread_arg_t;
+
+client_t client_list[100];
+    int client_count = 0; 
 
 /* Thread routine to serve connection to client. */
 void *pthread_routine(void *arg);
@@ -35,6 +38,8 @@ int main(int argc, char *argv[]) {
     pthread_arg_t *pthread_arg;
     pthread_t pthread;
     socklen_t client_address_len;
+    
+    char buffer[1000];
 
     /* Get port from command line arguments or stdin. */
     port = argc > 1 ? atoi(argv[1]) : 0;
@@ -110,12 +115,22 @@ int main(int argc, char *argv[]) {
             free(pthread_arg);
             continue;
         }
+	
+	//First message sent by client is always name of the client
+	read( new_socket_fd , buffer, 1024);
+    	printf("Client connected - %s\n",buffer );
+
+        client_list[client_count].new_socket_fd = new_socket_fd;
+        strcpy(client_list[client_count].client_name, buffer);
+
+        
 
         /* Initialise pthread argument. */
-        pthread_arg->new_socket_fd = new_socket_fd;
-        /* TODO: Initialise arguments passed to threads here. See lines 22 and
-         * 139.
-         */
+	pthread_arg->client = client_list[client_count];
+
+        client_count++;
+
+        
 
         /* Create thread to serve connection to client. */
         if (pthread_create(&pthread, &pthread_attr, pthread_routine, (void *)pthread_arg) != 0) {
@@ -123,6 +138,8 @@ int main(int argc, char *argv[]) {
             free(pthread_arg);
             continue;
         }
+
+	memset(buffer, 0, strlen(buffer));
     }
 
     /* close(socket_fd);
@@ -134,22 +151,50 @@ int main(int argc, char *argv[]) {
 
 void *pthread_routine(void *arg) {
     pthread_arg_t *pthread_arg = (pthread_arg_t *)arg;
-    int new_socket_fd = pthread_arg->new_socket_fd;
+    int valread;
+    char buffer[1024] = {0};
+   
     struct sockaddr_in client_address = pthread_arg->client_address;
-    /* TODO: Get arguments passed to threads here. See lines 22 and 116. */
-
+    struct client_t client = pthread_arg->client;
+    
+    printf("Thread created for client %s\n", client.client_name);
+    
     free(arg);
 
-    /* TODO: Put client interaction code here. For example, use
-     * write(new_socket_fd,,) and read(new_socket_fd,,) to send and receive
-     * messages with the client.
-     */
+    while(valread = read( client.new_socket_fd , buffer, 1024))
+    {
+    	
+	printf("Message received from %s : %s\n", client.client_name, buffer);
+        char *client_to_forward = strtok (buffer, "%");
+	char *message_to_forward = strtok (NULL, "%");
+        int socket_fd_to_forward;
 
-    close(new_socket_fd);
-    return NULL;
+	printf("%s sent a message to forward to %s\n",client.client_name, client_to_forward );
+        
+        int client_found = 0, i;
+
+	for(i=0; i < client_count; i++)
+        {
+	    if(strcmp(client_to_forward, client_list[i].client_name) == 0)
+            {
+		client_found = 1;
+		socket_fd_to_forward = client_list[i].new_socket_fd;
+	    }
+	}
+	
+	if(client_found)
+		send(socket_fd_to_forward , message_to_forward , strlen(message_to_forward) , 0 );
+	else
+		printf("client %s not found in the connected clients list\n", client_to_forward);
+        
+        memset(buffer, 0, sizeof(buffer));
+        
+    }
+
 }
 
 void signal_handler(int signal_number) {
     /* TODO: Put exit cleanup code here. */
     exit(0);
 }
+
